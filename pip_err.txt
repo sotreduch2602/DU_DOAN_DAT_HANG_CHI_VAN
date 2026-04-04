@@ -1,0 +1,4 @@
+WARNING: Ignoring invalid distribution ~ip (C:\Users\Nguyen2D\Desktop\D\u1ef0 \u0110OÁN \u0110\u1eb6T HÀNG\.venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~ip (C:\Users\Nguyen2D\Desktop\D\u1ef0 \u0110OÁN \u0110\u1eb6T HÀNG\.venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~ip (C:\Users\Nguyen2D\Desktop\D\u1ef0 \u0110OÁN \u0110\u1eb6T HÀNG\.venv\Lib\site-packages)
+WARNING: Ignoring invalid distribution ~ip (C:\Users\Nguyen2D\Desktop\D\u1ef0 \u0110OÁN \u0110\u1eb6T HÀNG\.venv\Lib\site-packages)
