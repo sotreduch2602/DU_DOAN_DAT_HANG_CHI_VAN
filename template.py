@@ -1,4 +1,4 @@
-"""
+﻿"""
 Script điền dữ liệu vào template Dự Toán Đặt Hàng
 Steps 4-8 theo tài liệu mapping:
   Step 4: Làm sạch dữ liệu AMIS (xóa khách HỘ KINH DOANH NGUYỄN THỊ KHIÊM NHƯ)
@@ -19,13 +19,13 @@ from xlutils.copy import copy as xl_copy
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 CUSTOMER_EXCLUDE = "HỘ KINH DOANH NGUYỄN THỊ KHIÊM NHƯ"
 
-AMIS_3M_PATH   = "input/AMIS/So_chi_tiet_ban_hang_3_thang.xlsx"
-AMIS_6M_PATH   = "input/AMIS/So_chi_tiet_ban_hang_6_thang.xlsx"
-AMIS_TON_PATH  = "input/AMIS/Tong_hop_ton_tren_nhieu_kho.xlsx"
-ESHOP_BH_PATH  = "input/ESHOP/SỔ CHI TIẾT BÁN HÀNG.xlsx"
-ESHOP_TON_PATH = "input/ESHOP/TỔNG HỢP TỒN KHO.xlsx"
-TEMPLATE_PATH  = "input/TEMPLATE/DU_DOAN_DAT_HANG_6_THANG.xls"
-OUTPUT_PATH    = "output/DU_DOAN_DAT_HANG_OUTPUT.xls"
+AMIS_3M_PATH        = "input/AMIS/So_chi_tiet_ban_hang_AMIS_3m.xlsx"
+AMIS_6M_PATH        = "input/AMIS/So_chi_tiet_ban_hang_AMIS_6m.xlsx"
+AMIS_TON_PATH       = "input/AMIS/Tong_hop_ton_tren_nhieu_kho_AMIS_912026.xlsx"
+ESHOP_TON_3M_PATH   = "input/ESHOP/TONG_HOP_TON_KHO_eShop_3m.xlsx"
+ESHOP_TON_6M_PATH   = "input/ESHOP/TONG_HOP_TON_KHO_eShop_6m.xlsx"
+TEMPLATE_PATH       = "input/TEMPLATE/DU_DOAN_DAT_HANG_6_THANG.xls"
+OUTPUT_PATH         = "output/DU_DOAN_DAT_HANG_OUTPUT.xls"
 
 TEMPLATE_SHEET = "VAC 6 THANG 09.07.25-09.01.26"
 HEADER_ROW     = 5   # 0-indexed, row 5 chứa header (Code, Name, ...)
@@ -68,25 +68,22 @@ amis_sl_3m = sum_amis_by_sku(amis_3m)
 amis_sl_6m = sum_amis_by_sku(amis_6m)
 print(f"  AMIS 3m: {len(amis_sl_3m)} SKUs | AMIS 6m: {len(amis_sl_6m)} SKUs")
 
-# ─── Load ESHOP bán hàng → lấy cột Xuất kho (Số lượng) ──────────────────────
-print("Đang load dữ liệu ESHOP bán hàng...")
-eshop_bh = pd.read_excel(ESHOP_BH_PATH, header=3)
+# ─── Load ESHOP tồn kho 3 tháng → lấy cột Xuất kho (dùng cho Step 6) ────────
+print("Đang load dữ liệu ESHOP tồn kho 3 tháng...")
+eshop_ton_3m = pd.read_excel(ESHOP_TON_3M_PATH, header=3)
+eshop_ton_3m = eshop_ton_3m[eshop_ton_3m["Mã hàng hóa"].notna()].reset_index(drop=True)
+eshop_ton_3m = eshop_ton_3m[eshop_ton_3m["Mã hàng hóa"] != "(2)"].reset_index(drop=True)
+eshop_xuat_kho_3m = eshop_ton_3m.set_index("Mã hàng hóa")["Xuất kho"]
+print(f"  ESHOP tồn kho 3m: {len(eshop_xuat_kho_3m)} SKUs")
 
-# Cột: Mã hàng hóa, Số lượng
-eshop_sl = eshop_bh.groupby("Mã hàng hóa")["Số lượng"].sum()
-print(f"  ESHOP bán hàng: {len(eshop_sl)} SKUs")
-
-# ─── Load ESHOP tồn kho → lấy cột Cuối kỳ ───────────────────────────────────
-print("Đang load dữ liệu ESHOP tồn kho...")
-eshop_ton = pd.read_excel(ESHOP_TON_PATH, header=3)
-
-# Bỏ row đầu tiên nếu là row mô tả (1), (2)...
-eshop_ton = eshop_ton[eshop_ton["Mã hàng hóa"].notna()].reset_index(drop=True)
-eshop_ton = eshop_ton[eshop_ton["Mã hàng hóa"] != "(2)"].reset_index(drop=True)
-
-eshop_cuoi_ky = eshop_ton.set_index("Mã hàng hóa")["Cuối kỳ"]
-eshop_xuat_kho = eshop_ton.set_index("Mã hàng hóa")["Xuất kho"]
-print(f"  ESHOP tồn kho: {len(eshop_cuoi_ky)} SKUs")
+# ─── Load ESHOP tồn kho 6 tháng → lấy cột Xuất kho + Cuối kỳ ────────────────
+print("Đang load dữ liệu ESHOP tồn kho 6 tháng...")
+eshop_ton_6m = pd.read_excel(ESHOP_TON_6M_PATH, header=3)
+eshop_ton_6m = eshop_ton_6m[eshop_ton_6m["Mã hàng hóa"].notna()].reset_index(drop=True)
+eshop_ton_6m = eshop_ton_6m[eshop_ton_6m["Mã hàng hóa"] != "(2)"].reset_index(drop=True)
+eshop_xuat_kho_6m = eshop_ton_6m.set_index("Mã hàng hóa")["Xuất kho"]
+eshop_cuoi_ky     = eshop_ton_6m.set_index("Mã hàng hóa")["Cuối kỳ"]
+print(f"  ESHOP tồn kho 6m: {len(eshop_xuat_kho_6m)} SKUs")
 
 # ─── Load AMIS tồn kho ────────────────────────────────────────────────────────
 print("Đang load dữ liệu AMIS tồn kho...")
@@ -115,20 +112,23 @@ for row_idx in range(DATA_START_ROW, rs.nrows):
     if not code or code in ("", "nan"):
         continue
 
-    # ── Step 6: SL Bán 3 tháng = AMIS 3m + ESHOP xuất kho ──
-    sl_amis_3m  = amis_sl_3m.get(code, 0)
-    sl_eshop_xk = eshop_xuat_kho.get(code, 0)
-    # Nếu ESHOP dùng mã khác (có hậu tố -01 v.v.), thử khớp prefix
-    if sl_eshop_xk == 0:
-        matches = [v for k, v in eshop_xuat_kho.items()
+    # ── Step 6: SL Bán 3 tháng = AMIS 3m + ESHOP xuất kho 3m ──
+    sl_amis_3m   = amis_sl_3m.get(code, 0)
+    sl_eshop_xk_3m = eshop_xuat_kho_3m.get(code, 0)
+    if sl_eshop_xk_3m == 0:
+        matches = [v for k, v in eshop_xuat_kho_3m.items()
                    if str(k).startswith(code) or code.startswith(str(k).split("-")[0])]
-        sl_eshop_xk = sum(matches)
+        sl_eshop_xk_3m = sum(matches)
+    sl_3m = sl_amis_3m + sl_eshop_xk_3m
 
-    sl_3m = sl_amis_3m + sl_eshop_xk
-
-    # ── Step 7: SL Bán 6 tháng = AMIS 6m + ESHOP xuất kho ──
+    # ── Step 7: SL Bán 6 tháng = AMIS 6m + ESHOP xuất kho 6m ──
     sl_amis_6m_val = amis_sl_6m.get(code, 0)
-    sl_6m = sl_amis_6m_val + sl_eshop_xk
+    sl_eshop_xk_6m = eshop_xuat_kho_6m.get(code, 0)
+    if sl_eshop_xk_6m == 0:
+        matches = [v for k, v in eshop_xuat_kho_6m.items()
+                   if str(k).startswith(code) or code.startswith(str(k).split("-")[0])]
+        sl_eshop_xk_6m = sum(matches)
+    sl_6m = sl_amis_6m_val + sl_eshop_xk_6m
 
     # ── Step 8: Tồn kho = AMIS tồn + ESHOP cuối kỳ ──
     ton_amis  = amis_ton_by_sku.get(code, 0)
