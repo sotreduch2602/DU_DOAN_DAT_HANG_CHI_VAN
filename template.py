@@ -102,6 +102,9 @@ for _, row in eshop_ton_6m.iterrows():
 # ─── Load AMIS tồn kho ────────────────────────────────────────────────────────
 print("Đang load dữ liệu AMIS tồn kho...")
 amis_ton = pd.read_excel(AMIS_TON_PATH, header=3)
+# Lọc bỏ dòng tổng cộng và các mã không hợp lệ
+amis_ton = amis_ton[amis_ton["Mã hàng"].notna()]
+amis_ton = amis_ton[~amis_ton["Mã hàng"].astype(str).str.strip().isin(["", "nan", "Tổng cộng"])]
 amis_ton_by_sku = amis_ton.set_index("Mã hàng")["Tổng"]
 print(f"  AMIS tồn kho: {len(amis_ton_by_sku)} SKUs")
 
