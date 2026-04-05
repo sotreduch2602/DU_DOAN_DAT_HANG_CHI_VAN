@@ -1,14 +1,4 @@
-﻿"""
-Script điền dữ liệu vào template Dự Toán Đặt Hàng
-Steps 4-8 theo tài liệu mapping:
-  Step 4: Làm sạch dữ liệu AMIS (xóa khách HỘ KINH DOANH NGUYỄN THỊ KHIÊM NHƯ)
-  Step 5: Mở template
-  Step 6: Điền SL Bán 3 tháng (AMIS 3m + ESHOP xuất kho 3m)
-  Step 7: Điền SL Bán 6 tháng (AMIS 6m + ESHOP xuất kho 6m)
-  Step 8: Điền Tồn kho (AMIS tồn + ESHOP cuối kỳ)
-"""
-
-import sys, io
+﻿import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 import pandas as pd
