@@ -34,6 +34,7 @@ DATA_START_ROW = 6   # 0-indexed, data bắt đầu từ row 6
 # Cột trong template (0-indexed)
 COL_CODE      = 1   # Code / Mã hàng
 COL_NAME      = 2   # Tên hàng
+COL_NOTE      = 3   # Note
 COL_SL3M      = 4   # SL BÁN 3 THÁNG
 COL_SL6M      = 5   # SL BÁN 6 THÁNG
 COL_TON       = 6   # TỒN KHO
@@ -42,6 +43,17 @@ COL_NGAY_TON  = 11  # NGÀY TỒN
 COL_FORECAST  = 22  # Order Forecast
 
 DAYS_6M = 180
+
+# ─── Style: font đỏ để highlight cảnh báo ────────────────────────────────────
+_red_font = xlwt.Font()
+_red_font.colour_index = 0x0A  # built-in red
+
+def make_red_style(base_style=None):
+    style = xlwt.XFStyle()
+    style.font = _red_font
+    return style
+
+RED_STYLE = make_red_style()
 
 # ─── STEP 4: Load & làm sạch AMIS ────────────────────────────────────────────
 print("Đang load dữ liệu AMIS...")
@@ -137,19 +149,7 @@ def calc_data_for_code(code):
         ton_eshop = sum(matches_ton)
     ton_kho = ton_amis + ton_eshop
 
-    # Step 9: BQ Bán/Ngày
-    bq_ban_ngay = sl_6m / DAYS_6M if sl_6m > 0 else 0
-
-    # Step 10: Ngày Tồn
-    ngay_ton = (ton_kho / bq_ban_ngay) if bq_ban_ngay > 0 else 99999
-
-    # Step 12: Order Forecast
-    if ngay_ton < DAYS_6M:
-        order_forecast = round((DAYS_6M - ngay_ton) * bq_ban_ngay)
-    else:
-        order_forecast = 0
-
-    return sl_3m, sl_6m, ton_kho, bq_ban_ngay, ngay_ton, order_forecast
+    return sl_3m, sl_6m, ton_kho
 
 
 # ─── STEP 5: Mở template, đọc mã hàng đã có sẵn ─────────────────────────────
@@ -181,16 +181,28 @@ print(f"  Template có {len(template_codes)} mã hàng sẵn có.")
 # ─── STEP 6-8: Điền data cho mã đã có trong template ─────────────────────────
 updated = 0
 for stt, (code, row_idx) in enumerate(template_codes.items(), start=1):
-    sl_3m, sl_6m, ton_kho, bq_ban_ngay, ngay_ton, order_forecast = calc_data_for_code(code)
+    sl_3m, sl_6m, ton_kho = calc_data_for_code(code)
+    r = row_idx + 1  # Excel row (1-indexed)
+    sl6m_cell  = f"F{r}"
+    ton_cell   = f"G{r}"
+    bq_cell    = f"K{r}"
+    ngay_cell  = f"L{r}"
 
-    ws.write(row_idx, 0,            stt)
-    ws.write(row_idx, COL_NAME,     ten_hang_map.get(code, ""))
-    ws.write(row_idx, COL_SL3M,     float(sl_3m))
-    ws.write(row_idx, COL_SL6M,     float(sl_6m))
-    ws.write(row_idx, COL_TON,      float(ton_kho))
-    ws.write(row_idx, COL_BQ,       round(float(bq_ban_ngay), 4))
-    ws.write(row_idx, COL_NGAY_TON, round(float(ngay_ton), 2))
-    ws.write(row_idx, COL_FORECAST, float(order_forecast))
+    # Step 11: xác định highlight — tính ngay_ton bằng Python để quyết định
+    bq = sl_6m / DAYS_6M if sl_6m > 0 else 0
+    ngay_ton = (ton_kho / bq) if bq > 0 else None
+    note = str(rs.row_values(row_idx)[COL_NOTE]).strip()
+    bo_mau = "bỏ mẫu" in note.lower()
+    style = RED_STYLE if (ngay_ton is not None and ngay_ton < DAYS_6M and not bo_mau) else xlwt.Style.default_style
+
+    ws.write(row_idx, 0,            stt,                              style)
+    ws.write(row_idx, COL_NAME,     ten_hang_map.get(code, ""),       style)
+    ws.write(row_idx, COL_SL3M,     float(sl_3m),                    style)
+    ws.write(row_idx, COL_SL6M,     float(sl_6m),                    style)
+    ws.write(row_idx, COL_TON,      float(ton_kho),                   style)
+    ws.write(row_idx, COL_BQ,       xlwt.Formula(f'IF({sl6m_cell}>0,{sl6m_cell}/{DAYS_6M},"")'),                              style)
+    ws.write(row_idx, COL_NGAY_TON, xlwt.Formula(f'IF({bq_cell}>0,{ton_cell}/{bq_cell},"")'),                                 style)
+    ws.write(row_idx, COL_FORECAST, xlwt.Formula(f'IF({ngay_cell}<{DAYS_6M},ROUND(({DAYS_6M}-{ngay_cell})*{bq_cell},0),"")'), style)
     updated += 1
 
 print(f"  Đã cập nhật {updated} mã hàng có sẵn trong template.")
@@ -211,18 +223,28 @@ print(f"  Phát hiện {len(new_codes)} mã hàng mới (chưa có trong templat
 next_row = rs.nrows
 inserted = 0
 for code in new_codes:
-    sl_3m, sl_6m, ton_kho, bq_ban_ngay, ngay_ton, order_forecast = calc_data_for_code(code)
+    sl_3m, sl_6m, ton_kho = calc_data_for_code(code)
+    r = next_row + 1  # Excel row (1-indexed)
+    sl6m_cell  = f"F{r}"
+    ton_cell   = f"G{r}"
+    bq_cell    = f"K{r}"
+    ngay_cell  = f"L{r}"
+
+    # Step 11: rows mới không có Note → chỉ check ngay_ton
+    bq = sl_6m / DAYS_6M if sl_6m > 0 else 0
+    ngay_ton = (ton_kho / bq) if bq > 0 else None
+    style = RED_STYLE if (ngay_ton is not None and ngay_ton < DAYS_6M) else xlwt.Style.default_style
 
     stt = updated + inserted + 1
-    ws.write(next_row, 0,            stt)
-    ws.write(next_row, COL_CODE,     code)
-    ws.write(next_row, COL_NAME,     ten_hang_map.get(code, ""))
-    ws.write(next_row, COL_SL3M,     float(sl_3m))
-    ws.write(next_row, COL_SL6M,     float(sl_6m))
-    ws.write(next_row, COL_TON,      float(ton_kho))
-    ws.write(next_row, COL_BQ,       round(float(bq_ban_ngay), 4))
-    ws.write(next_row, COL_NGAY_TON, round(float(ngay_ton), 2))
-    ws.write(next_row, COL_FORECAST, float(order_forecast))
+    ws.write(next_row, 0,            stt,                              style)
+    ws.write(next_row, COL_CODE,     code,                             style)
+    ws.write(next_row, COL_NAME,     ten_hang_map.get(code, ""),       style)
+    ws.write(next_row, COL_SL3M,     float(sl_3m),                    style)
+    ws.write(next_row, COL_SL6M,     float(sl_6m),                    style)
+    ws.write(next_row, COL_TON,      float(ton_kho),                   style)
+    ws.write(next_row, COL_BQ,       xlwt.Formula(f'IF({sl6m_cell}>0,{sl6m_cell}/{DAYS_6M},"")'),                              style)
+    ws.write(next_row, COL_NGAY_TON, xlwt.Formula(f'IF({bq_cell}>0,{ton_cell}/{bq_cell},"")'),                                 style)
+    ws.write(next_row, COL_FORECAST, xlwt.Formula(f'IF({ngay_cell}<{DAYS_6M},ROUND(({DAYS_6M}-{ngay_cell})*{bq_cell},0),"")'), style)
     next_row += 1
     inserted += 1
 
