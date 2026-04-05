@@ -110,6 +110,12 @@ amis_ton = amis_ton[~amis_ton["Mã hàng"].astype(str).str.strip().isin(["", "na
 amis_ton_by_sku = amis_ton.set_index("Mã hàng")["Tổng"]
 print(f"  AMIS tồn kho: {len(amis_ton_by_sku)} SKUs")
 
+# Bổ sung tên hàng từ AMIS tồn kho cho các mã chưa có
+for _, row in amis_ton.iterrows():
+    ma = str(row["Mã hàng"]).strip()
+    if ma and ma not in ten_hang_map:
+        ten_hang_map[ma] = str(row["Tên hàng"]).strip()
+
 # ─── Helper: tính data cho 1 mã hàng ─────────────────────────────────────────
 def calc_data_for_code(code):
     # Step 6: SL Bán 3 tháng
