@@ -5,6 +5,7 @@ import pandas as pd
 import xlrd
 import xlwt
 from xlutils.copy import copy as xl_copy
+import csv
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 CUSTOMER_EXCLUDE = "HỘ KINH DOANH NGUYỄN THỊ KHIÊM NHƯ"
@@ -14,8 +15,9 @@ AMIS_6M_PATH        = "input/AMIS/So_chi_tiet_ban_hang_AMIS_6m.xlsx"
 AMIS_TON_PATH       = "input/AMIS/Tong_hop_ton_tren_nhieu_kho_AMIS_912026.xlsx"
 ESHOP_TON_3M_PATH   = "input/ESHOP/TONG_HOP_TON_KHO_eShop_3m.xlsx"
 ESHOP_TON_6M_PATH   = "input/ESHOP/TONG_HOP_TON_KHO_eShop_6m.xlsx"
-TEMPLATE_PATH       = "input/TEMPLATE/DU_DOAN_DAT_HANG_6_THANG_NO_DATA.xls"
+TEMPLATE_PATH       = "input/TEMPLATE/DU_DOAN_DAT_HANG_6_THANG.xls"
 OUTPUT_PATH         = "output/DU_DOAN_DAT_HANG_OUTPUT.xls"
+OUTPUT_CSV_PATH     = "output/DU_DOAN_DAT_HANG_OUTPUT.csv"
 
 TEMPLATE_SHEET = "VAC 6 THANG 09.07.25-09.01.26"
 HEADER_ROW     = 5   # 0-indexed, row 5 chứa header (Code, Name, ...)
@@ -31,6 +33,7 @@ COL_TON       = 6   # TỒN KHO
 COL_BQ        = 10  # BQ BÁN/NGÀY
 COL_NGAY_TON  = 11  # NGÀY TỒN
 COL_FORECAST  = 22  # Order Forecast
+COL_THONGBAO  = 25  # Thông báo
 
 DAYS_6M = 180
 
@@ -199,6 +202,7 @@ for stt, (code, row_idx) in enumerate(template_codes.items(), start=1):
     ws.write(row_idx, COL_BQ,       xlwt.Formula(f'IF({sl6m_cell}>0,{sl6m_cell}/{DAYS_6M},"")'),                              style)
     ws.write(row_idx, COL_NGAY_TON, xlwt.Formula(f'IF({bq_cell}>0,{ton_cell}/{bq_cell},"")'),                                 style)
     ws.write(row_idx, COL_FORECAST, xlwt.Formula(f'IF({ngay_cell}<{DAYS_6M},ROUND(({DAYS_6M}-{ngay_cell})*{bq_cell},0),"")'), style)
+    ws.write(row_idx, COL_THONGBAO, "Thiếu hàng" if (ngay_ton is not None and ngay_ton < DAYS_6M and not bo_mau) else "")
     updated += 1
 
 print(f"  Đã cập nhật {updated} mã hàng có sẵn trong template.")
@@ -241,6 +245,7 @@ for code in new_codes:
     ws.write(next_row, COL_BQ,       xlwt.Formula(f'IF({sl6m_cell}>0,{sl6m_cell}/{DAYS_6M},"")'),                              style)
     ws.write(next_row, COL_NGAY_TON, xlwt.Formula(f'IF({bq_cell}>0,{ton_cell}/{bq_cell},"")'),                                 style)
     ws.write(next_row, COL_FORECAST, xlwt.Formula(f'IF({ngay_cell}<{DAYS_6M},ROUND(({DAYS_6M}-{ngay_cell})*{bq_cell},0),"")'), style)
+    ws.write(next_row, COL_THONGBAO, "Thiếu hàng" if (ngay_ton is not None and ngay_ton < DAYS_6M) else "")
     next_row += 1
     inserted += 1
 
@@ -251,3 +256,54 @@ import os
 os.makedirs("output", exist_ok=True)
 wb.save(OUTPUT_PATH)
 print(f"Đã lưu file: {OUTPUT_PATH}")
+
+# ─── Export CSV với giá trị cố định (không công thức) ──────────────────────────
+print(f"Đang xuất file CSV: {OUTPUT_CSV_PATH}")
+
+# Đọc lại file XLS để lấy giá trị đã tính (bao gồm công thức)
+rb_out = xlrd.open_workbook(OUTPUT_PATH, formatting_info=False)
+rs_out = rb_out.sheet_by_index(sheet_idx)
+
+csv_data = []
+# Đọc header từ template
+csv_header = ["STT", "Code", "Name", "Note", "SL BÁN 3 THÁNG", "SL BÁN 6 THÁNG", "TỒN KHO",
+              "BQ BÁN/NGÀY", "NGÀY TỒN", "Order Forecast"]
+csv_data.append(csv_header)
+
+# Đọc tất cả dòng dữ liệu từ file output
+data_rows = []
+for row_idx in range(DATA_START_ROW, rs_out.nrows):
+    row_vals = rs_out.row_values(row_idx)
+    code = str(row_vals[COL_CODE]).strip()
+    if code and code not in ("", "nan"):
+        stt = row_vals[0]
+        name = row_vals[COL_NAME]
+        note = row_vals[COL_NOTE] if COL_NOTE < len(row_vals) else ""
+        sl3m = row_vals[COL_SL3M] if COL_SL3M < len(row_vals) else ""
+        sl6m = row_vals[COL_SL6M] if COL_SL6M < len(row_vals) else ""
+        ton = row_vals[COL_TON] if COL_TON < len(row_vals) else ""
+
+        # Tính BQ bán/ngày
+        bq = sl6m / DAYS_6M if isinstance(sl6m, (int, float)) and sl6m > 0 else ""
+
+        # Tính ngày tồn
+        ngay_ton = ""
+        if isinstance(ton, (int, float)) and isinstance(bq, (int, float)) and bq > 0:
+            ngay_ton = ton / bq
+
+        # Tính Order Forecast
+        forecast = ""
+        if isinstance(ngay_ton, (int, float)) and isinstance(bq, (int, float)) and ngay_ton < DAYS_6M:
+            forecast = round((DAYS_6M - ngay_ton) * bq, 0)
+
+        data_rows.append([stt, code, name, note, sl3m, sl6m, ton, bq, ngay_ton, forecast])
+
+# Thêm dữ liệu vào CSV
+csv_data.extend(data_rows)
+
+# Ghi file CSV
+with open(OUTPUT_CSV_PATH, 'w', newline='', encoding='utf-8-sig') as f:
+    writer = csv.writer(f)
+    writer.writerows(csv_data)
+
+print(f"Đã lưu file CSV: {OUTPUT_CSV_PATH}")
